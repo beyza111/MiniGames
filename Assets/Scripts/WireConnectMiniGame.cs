@@ -1,6 +1,6 @@
 ﻿using UnityEngine;
-using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 using System.Linq;
 using System.Collections.Generic;
 
@@ -75,7 +75,31 @@ public class WireConnectMiniGame : MiniGameBase
         }
     }
 
-    public void BeginDragFrom(Plug left, PointerEventData e)
+ 
+    void Update()
+    {
+        if (state != MiniGameState.Running) return;
+
+        if (Input.GetMouseButtonDown(0) && activeLeft == null)
+        {
+            var lp = GetLeftUnder(Input.mousePosition);
+            if (lp != null)
+                BeginDragFrom(lp, (Vector2)Input.mousePosition);
+        }
+
+        if (Input.GetMouseButton(0) && activeLeft != null)
+        {
+            DragTo((Vector2)Input.mousePosition);
+        }
+
+        if (Input.GetMouseButtonUp(0) && activeLeft != null)
+        {
+            EndDrag((Vector2)Input.mousePosition);
+        }
+    }
+  
+
+    public void BeginDragFrom(Plug left, Vector2 screenPos)
     {
         if (state != MiniGameState.Running) return;
 
@@ -86,15 +110,15 @@ public class WireConnectMiniGame : MiniGameBase
         tempLine.rectTransform.pivot = new Vector2(0, 0.5f);
         tempLine.transform.SetAsFirstSibling();
 
-        UpdateLine(left.RT.position, e.position);
+        UpdateLine(left.RT.position, screenPos);
     }
 
-    public void DragTo(PointerEventData e)
+    public void DragTo(Vector2 screenPos)
     {
         if (!activeLeft || !tempLine) return;
 
-        Plug overRight = snapHover ? GetRightUnder(e) : null;
-        Vector3 endPos = overRight ? overRight.RT.position : e.position;
+        Plug overRight = snapHover ? GetRightUnder(screenPos) : null;
+        Vector3 endPos = overRight ? overRight.RT.position : (Vector3)screenPos;
 
         if (overRight)
             tempLine.color = (overRight.id == activeLeft.id) ? okColor : wrongColor;
@@ -104,11 +128,11 @@ public class WireConnectMiniGame : MiniGameBase
         UpdateLine(activeLeft.RT.position, endPos);
     }
 
-    public void EndDrag(PointerEventData e)
+    public void EndDrag(Vector2 screenPos)
     {
         if (!activeLeft || !tempLine) return;
 
-        var hitRight = GetRightUnder(e);
+        var hitRight = GetRightUnder(screenPos);
 
         if (hitRight && hitRight.id == activeLeft.id)
         {
@@ -126,11 +150,12 @@ public class WireConnectMiniGame : MiniGameBase
         }
         else
         {
-           
             UseAttempt();
             if (!HasAttemptsLeft)
             {
-           
+                if (tempLine) Destroy(tempLine.gameObject);
+                tempLine = null;
+                activeLeft = null;
                 return;
             }
 
@@ -161,14 +186,27 @@ public class WireConnectMiniGame : MiniGameBase
         if (line) line.raycastTarget = false;
     }
 
-    Plug GetRightUnder(PointerEventData e)
+    // -------- UI Raycast yardımcıları (sadece okumak için) --------
+    Plug GetLeftUnder(Vector2 screenPos)
     {
         _rayBuf.Clear();
-        _gr.Raycast(e, _rayBuf);
+        var ped = new PointerEventData(EventSystem.current) { position = screenPos };
+        _gr.Raycast(ped, _rayBuf);
+        return _rayBuf
+            .Select(r => r.gameObject.GetComponentInParent<Plug>())
+            .FirstOrDefault(p => p && p.isLeft && !p.IsLocked);
+    }
+
+    Plug GetRightUnder(Vector2 screenPos)
+    {
+        _rayBuf.Clear();
+        var ped = new PointerEventData(EventSystem.current) { position = screenPos };
+        _gr.Raycast(ped, _rayBuf);
         return _rayBuf
             .Select(r => r.gameObject.GetComponentInParent<Plug>())
             .FirstOrDefault(p => p && !p.isLeft && !p.IsLocked);
     }
+  
 
     System.Collections.IEnumerator FlashWrongThenCancel()
     {
@@ -193,7 +231,6 @@ public class WireConnectMiniGame : MiniGameBase
     void CacheSlotsOnce()
     {
         if (slotsCached) return;
-
         leftSlots = leftPlugs.Select(p => Snap(p.RT.anchoredPosition)).ToArray();
         rightSlots = rightPlugs.Select(p => Snap(p.RT.anchoredPosition)).ToArray();
         slotsCached = true;
@@ -206,7 +243,6 @@ public class WireConnectMiniGame : MiniGameBase
             int j = Random.Range(0, i + 1);
             (plugs[i], plugs[j]) = (plugs[j], plugs[i]);
         }
-
         int n = Mathf.Min(plugs.Length, slots.Length);
         for (int i = 0; i < n; i++)
             plugs[i].RT.anchoredPosition = slots[i];
