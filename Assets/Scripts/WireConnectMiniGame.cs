@@ -180,7 +180,7 @@ public class WireConnectMiniGame : MiniGameBase
         Vector3 d2 = b - a;
 
         rt.position = a;
-        rt.sizeDelta = new Vector2(d2.magnitude, 40f);
+        rt.sizeDelta = new Vector2(d2.magnitude, 30f);
         rt.rotation = Quaternion.FromToRotation(Vector3.right, d2.normalized);
     }
 

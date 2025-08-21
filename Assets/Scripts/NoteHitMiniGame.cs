@@ -1,5 +1,7 @@
 using UnityEngine;
 using UnityEngine.UI;
+using System.Collections;
+using System.Collections.Generic;
 
 public class NoteHitMiniGame : MiniGameBase
 {
@@ -8,6 +10,12 @@ public class NoteHitMiniGame : MiniGameBase
     public RectTransform hitZone;
     public GameObject notePrefab;
     public Image progressFill;
+
+    [Header("Hit Zone Feedback")]
+    public Image hitZoneImage;
+    public Color okColor = Color.green;
+    public Color missColor = Color.red;
+    public float flashTime = 0.12f;
 
     [Header("Gameplay")]
     public int notesToWin = 5;
@@ -20,6 +28,10 @@ public class NoteHitMiniGame : MiniGameBase
     int misses;
     float timer;
 
+    Color _baseColor;
+    Coroutine _flashCR;
+    readonly List<NoteObject> _activeNotes = new();
+
     void OnEnable() => StartGame();
 
     public override void StartGame()
@@ -29,11 +41,23 @@ public class NoteHitMiniGame : MiniGameBase
         misses = 0;
         timer = 0f;
         if (progressFill) progressFill.fillAmount = 0f;
+
+        if (hitZoneImage)
+        {
+            _baseColor = hitZoneImage.color;
+            if (_flashCR != null) StopCoroutine(_flashCR);
+            hitZoneImage.color = _baseColor;
+        }
+
+        _activeNotes.Clear();
     }
 
     void Update()
     {
         if (state != MiniGameState.Running) return;
+
+        if (Input.GetKeyDown(hitKey) && !AnyNoteInZone())
+            FlashZone(missColor);
 
         timer += Time.deltaTime;
         if (timer >= spawnInterval)
@@ -45,12 +69,44 @@ public class NoteHitMiniGame : MiniGameBase
 
     void SpawnNote()
     {
-        var note = Instantiate(notePrefab, spawnPoint.position, Quaternion.identity, spawnPoint.parent);
-        note.AddComponent<NoteObject>().Init(this, noteSpeed, hitZone, hitKey);
+        var go = Instantiate(notePrefab, spawnPoint.position, Quaternion.identity, spawnPoint.parent);
+        var note = go.AddComponent<NoteObject>();
+        note.Init(this, noteSpeed, hitZone, hitKey);
+        note.onResolved += OnNoteResolved;
+        _activeNotes.Add(note);
+    }
+
+    void OnNoteResolved(NoteObject n)
+    {
+        n.onResolved -= OnNoteResolved;
+        _activeNotes.Remove(n);
+    }
+
+    bool AnyNoteInZone()
+    {
+        for (int i = 0; i < _activeNotes.Count; i++)
+            if (_activeNotes[i] && _activeNotes[i].IsInHitZone()) return true;
+        return false;
+    }
+
+    void FlashZone(Color c)
+    {
+        if (!hitZoneImage) return;
+        if (_flashCR != null) StopCoroutine(_flashCR);
+        _flashCR = StartCoroutine(_Flash(c));
+    }
+
+    IEnumerator _Flash(Color c)
+    {
+        hitZoneImage.color = c;
+        yield return new WaitForSeconds(flashTime);
+        hitZoneImage.color = _baseColor;
+        _flashCR = null;
     }
 
     public void RegisterHit()
     {
+        FlashZone(okColor);
         hits++;
         if (progressFill) progressFill.fillAmount = (float)hits / notesToWin;
         if (hits >= notesToWin) PlayerWin();
@@ -58,6 +114,7 @@ public class NoteHitMiniGame : MiniGameBase
 
     public void RegisterMiss()
     {
+        FlashZone(missColor);
         misses++;
         if (misses >= maxMisses) PlayerLose();
     }
@@ -72,6 +129,8 @@ public class NoteObject : MonoBehaviour
     KeyCode hitKey;
     bool resolved;
 
+    public System.Action<NoteObject> onResolved;
+
     public void Init(NoteHitMiniGame owner, float speed, RectTransform hitZone, KeyCode hitKey)
     {
         this.owner = owner;
@@ -81,24 +140,36 @@ public class NoteObject : MonoBehaviour
         rt = GetComponent<RectTransform>();
     }
 
+    public bool IsInHitZone()
+    {
+        return RectTransformUtility.RectangleContainsScreenPoint(hitZone, rt.position, null);
+    }
+
     void Update()
     {
-        if (resolved) return;
+        if (resolved || owner.state != MiniGameState.Running) return;
 
         rt.anchoredPosition += Vector2.right * speed * Time.deltaTime;
 
-        if (Input.GetKeyDown(hitKey) && RectTransformUtility.RectangleContainsScreenPoint(hitZone, rt.position))
+        if (Input.GetKeyDown(hitKey) && IsInHitZone())
         {
-            resolved = true;
-            owner.RegisterHit();
-            Destroy(gameObject);
+            Resolve(true);
+            return;
         }
 
-        if (rt.position.x > hitZone.position.x + 100f) 
-        {
-            resolved = true;
-            owner.RegisterMiss();
-            Destroy(gameObject);
-        }
+        if (rt.position.x > hitZone.position.x + 100f)
+            Resolve(false);
+    }
+
+    void Resolve(bool hit)
+    {
+        if (resolved) return;
+        resolved = true;
+
+        if (hit) owner.RegisterHit();
+        else owner.RegisterMiss();
+
+        onResolved?.Invoke(this);
+        Destroy(gameObject);
     }
 }
