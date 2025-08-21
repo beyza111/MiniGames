@@ -3380,7 +3380,7 @@ MonoBehaviour:
   leftKey: 97
   rightKey: 100
   useArrowsInstead: 0
-  tapsToWin: 4
+  tapsToWin: 6
   perTapWindow: 1.5
   randomStart: 1
   loseOnWrongKey: 0

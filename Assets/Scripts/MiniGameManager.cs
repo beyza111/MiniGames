@@ -22,6 +22,7 @@ public class MiniGameManager : MonoBehaviour
     bool isTransitioning = false;
 
     bool suppressUnlockOnce = false; // prevents unlock during panel switching
+    int lastPlayedGame = 0;         
 
     void OnEnable()
     {
@@ -72,9 +73,7 @@ public class MiniGameManager : MonoBehaviour
     {
         if (panels.Count == 0) yield break;
         isTransitioning = true;
-        if (playerController) playerController.enabled = false; // lock player when UI opens
-
-        // unlock cursor so UI is clickable
+        if (playerController) playerController.enabled = false;
         Cursor.lockState = CursorLockMode.None;
         Cursor.visible = true;
 
@@ -157,15 +156,40 @@ public class MiniGameManager : MonoBehaviour
 
     public void Win()
     {
-        CloseActive();
-        if (panels.Count == 0) return;
-        index = Mathf.Min(index + 1, panels.Count - 1);
+        if (lastPlayedGame == 1 || lastPlayedGame == 2)
+        {
+            // return to Hub immediately, keep movement locked
+            suppressUnlockOnce = true;
+            CloseActive();
+            index = 0;                 // Hub
+            OpenCurrentInternal();     // show Hub again
+        }
+        else if (lastPlayedGame == 3)
+        {
+           
+            CloseActive();
+            index = 0;                 // prepare Hub for next time
+        }
+        else
+        {
+            //  go back to Hub
+            suppressUnlockOnce = true;
+            CloseActive();
+            index = 0;
+            OpenCurrentInternal();
+        }
+
+        lastPlayedGame = 0;
     }
 
     public void Lose()
     {
+       
+        suppressUnlockOnce = true;
         CloseActive();
         index = 0;
+        OpenCurrentInternal();
+        lastPlayedGame = 0;
     }
 
     public void SetMachineProximity(bool isNear) => isNearMachine = isNear;
@@ -181,6 +205,7 @@ public class MiniGameManager : MonoBehaviour
     public void OpenGameAt(int i)
     {
         if (i < 0 || i >= panels.Count) return;
+        lastPlayedGame = i;   
         index = i;
         OpenCurrentInternal();
     }
@@ -189,9 +214,7 @@ public class MiniGameManager : MonoBehaviour
     {
         if (!isTransitioning && active == null)
         {
-            if (playerController) playerController.enabled = true; // unlock only when UI fully closed
-
-            // lock cursor again when UI is closed
+            if (playerController) playerController.enabled = true;
             Cursor.lockState = CursorLockMode.Locked;
             Cursor.visible = false;
         }
