@@ -35,6 +35,7 @@ public class WireConnectMiniGame : MiniGameBase
     Vector2[] rightSlots;
     bool anchorsNormalized;
     bool slotsCached;
+    bool _shuffled = false;
 
     GraphicRaycaster _gr;
     readonly List<RaycastResult> _rayBuf = new List<RaycastResult>(8);
@@ -68,14 +69,16 @@ public class WireConnectMiniGame : MiniGameBase
 
         CacheSlotsOnce();
 
-        if (shuffleOnStart)
+      
+        if (shuffleOnStart && !_shuffled)
         {
             ShuffleColumn(leftPlugs, leftSlots);
             ShuffleColumn(rightPlugs, rightSlots);
+            _shuffled = true;
         }
     }
 
- 
+
     void Update()
     {
         if (state != MiniGameState.Running) return;
@@ -186,7 +189,7 @@ public class WireConnectMiniGame : MiniGameBase
         if (line) line.raycastTarget = false;
     }
 
-    // -------- UI Raycast yardımcıları (sadece okumak için) --------
+    //  UI Raycast helpers
     Plug GetLeftUnder(Vector2 screenPos)
     {
         _rayBuf.Clear();
