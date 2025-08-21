@@ -5,6 +5,8 @@ using System.Collections.Generic;
 
 public class MiniGameManager : MonoBehaviour
 {
+    public MonoBehaviour playerController;
+
     public KeyCode key = KeyCode.E;
     public bool isNearMachine = false;
 
@@ -18,6 +20,8 @@ public class MiniGameManager : MonoBehaviour
     int index = 0;
     GameObject active;
     bool isTransitioning = false;
+
+    bool suppressUnlockOnce = false; // prevents unlock during panel switching
 
     void OnEnable()
     {
@@ -37,9 +41,6 @@ public class MiniGameManager : MonoBehaviour
         {
             if (!p) continue;
             p.SetActive(false);
-
-            if (!p.GetComponent<MiniGameBase>())
-                Debug.LogWarning($"[MG] No MiniGameBase found at the root of '{p.name}'.");
         }
 
         if (fadeImage)
@@ -58,12 +59,24 @@ public class MiniGameManager : MonoBehaviour
         {
             StartCoroutine(OpenWithFade());
         }
+
+        if (panels.Count > 0 && active == panels[0])
+        {
+            if (Input.GetKeyDown(KeyCode.Alpha1)) OpenGameAt(1);
+            else if (Input.GetKeyDown(KeyCode.Alpha2)) OpenGameAt(2);
+            else if (Input.GetKeyDown(KeyCode.Alpha3)) OpenGameAt(3);
+        }
     }
 
     IEnumerator OpenWithFade()
     {
         if (panels.Count == 0) yield break;
         isTransitioning = true;
+        if (playerController) playerController.enabled = false; // lock player when UI opens
+
+        // unlock cursor so UI is clickable
+        Cursor.lockState = CursorLockMode.None;
+        Cursor.visible = true;
 
         yield return StartCoroutine(FadeAlpha(0f, 1f, fadeInTime));
 
@@ -75,6 +88,7 @@ public class MiniGameManager : MonoBehaviour
         yield return StartCoroutine(FadeAlpha(1f, 0f, fadeOutTime));
 
         isTransitioning = false;
+        UnlockIfSafe();
     }
 
     IEnumerator FadeAlpha(float from, float to, float duration)
@@ -104,6 +118,7 @@ public class MiniGameManager : MonoBehaviour
 
     void OpenCurrentInternal()
     {
+        suppressUnlockOnce = true;
         CloseActive();
 
         active = panels[index];
@@ -111,7 +126,6 @@ public class MiniGameManager : MonoBehaviour
 
         var mb = active.GetComponent<MiniGameBase>();
         if (mb) mb.StartGame();
-        else Debug.LogWarning($"[MG] '{active.name}' has no MiniGameBase.");
     }
 
     void CloseActive()
@@ -119,6 +133,14 @@ public class MiniGameManager : MonoBehaviour
         if (!active) return;
         active.SetActive(false);
         active = null;
+
+        if (suppressUnlockOnce)
+        {
+            suppressUnlockOnce = false;
+            return;
+        }
+
+        UnlockIfSafe();
     }
 
     void HandleAnyGameWon(MiniGameBase game)
@@ -147,4 +169,31 @@ public class MiniGameManager : MonoBehaviour
     }
 
     public void SetMachineProximity(bool isNear) => isNearMachine = isNear;
+
+    public void StartMiniGameWithFade(bool force = false)
+    {
+        if (isTransitioning || active != null) return;
+        if (!force && !isNearMachine) return;
+
+        StartCoroutine(OpenWithFade());
+    }
+
+    public void OpenGameAt(int i)
+    {
+        if (i < 0 || i >= panels.Count) return;
+        index = i;
+        OpenCurrentInternal();
+    }
+
+    void UnlockIfSafe()
+    {
+        if (!isTransitioning && active == null)
+        {
+            if (playerController) playerController.enabled = true; // unlock only when UI fully closed
+
+            // lock cursor again when UI is closed
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
+    }
 }

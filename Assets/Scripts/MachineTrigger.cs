@@ -1,18 +1,19 @@
 using UnityEngine;
 
-public class MachineTrigge : MonoBehaviour
+[RequireComponent(typeof(Collider))]
+public class MachineTrigger : MonoBehaviour
 {
-    public MiniGameManager manager;
+    public MiniGameMachine machine;
 
     void OnTriggerEnter(Collider other)
     {
         if (other.CompareTag("Player"))
-            manager.SetMachineProximity(true);
+            other.GetComponent<PlayerInteraction>()?.SetCurrentMachine(machine);
     }
 
     void OnTriggerExit(Collider other)
     {
         if (other.CompareTag("Player"))
-            manager.SetMachineProximity(false);
+            other.GetComponent<PlayerInteraction>()?.SetCurrentMachine(null);
     }
 }
